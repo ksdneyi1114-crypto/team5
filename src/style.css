@@ -22,7 +22,9 @@
     padding:18px 4px;background:rgba(250,249,255,.85);backdrop-filter:blur(10px);flex-wrap:wrap}
   .brand{display:flex;align-items:center;gap:9px;cursor:pointer;margin-right:auto}
   .brand-dot{width:14px;height:14px;border-radius:50%;background:var(--accent)}
+  .brand-text{display:flex;flex-direction:column;line-height:1.15}
   .brand-name{font-family:var(--serif);font-size:22px;font-weight:800;letter-spacing:.5px}
+  .brand-tagline{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.2px}
   .nav{display:flex;gap:4px}
   .nav-link{padding:8px 15px;border-radius:100px;font-size:14px;font-weight:700;color:var(--muted);transition:.16s}
   .nav-link:hover{color:var(--ink)}
