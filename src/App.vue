@@ -191,7 +191,55 @@
   v-else-if="view === 'cal'"
   :events="EVENTS"
   />
+  <!-- ── 지도 ── -->
+  <template v-else-if="view==='map'">
+    <section class="block map-view" style="padding:20px 0 60px">
+      <div class="map-toolbar">
+        <select v-model="mapRegion">
+          <option value="">전체 권역</option>
+          <option v-for="(r,i) in STATS.regions" :key="i" :value="i">{{ r }}</option>
+        </select>
+        <input class="map-search" placeholder="이름으로 검색..." v-model="query" @input="filterList" />
+        <div class="chips" style="margin-left:auto">
+          <button :class="{on:categoryFilter===''}" @click="categoryFilter=''">전체</button>
+          <button v-for="(c,ci) in STATS.cats" :key="ci" :class="{on:categoryFilter===ci}" @click="categoryFilter=ci">{{ c }}</button>
+        </div>
+      </div>
 
+      <div class="map-wrap">
+        <div id="map"></div>
+        <aside class="sidebar">
+          <div class="place-list">
+            <div class="place-card" v-for="p in filteredPlaces" :key="p.id" @click="flyToPlace(p); openPlace(p)">
+              <img :src="p.img" alt="" />
+              <div class="pc-body">
+                <div class="pc-cat">{{ STATS.cats[p.category] }}</div>
+                <div class="pc-title">{{ p.title }}</div>
+                <div class="pc-addr">{{ p.address }}</div>
+              </div>
+            </div>
+            <div v-if="filteredPlaces.length===0" style="padding:12px;color:var(--muted)">검색 결과가 없습니다.</div>
+          </div>
+        </aside>
+      </div>
+
+      <teleport to="body">
+        <div v-if="activePlace" class="modal-overlay" @click.self="closeModal">
+          <div class="modal-card modal-card--centered">
+            <div class="modal-content">
+              <div class="badge">{{ STATS.cats[activePlace.category] }}</div>
+              <h3>{{ activePlace.title }}</h3>
+              <div class="meta"><strong>지역</strong> {{ STATS.regions[activePlace.region] }}</div>
+              <div class="meta"><strong>주소</strong> {{ activePlace.address }}</div>
+              <p class="desc">{{ activePlace.desc }}</p>
+              <div style="margin-top:14px"><button class="btn btn-solid" @click="closeModal">지도앱에서 길찾기</button></div>
+            </div>
+            <button class="modal-close" @click="closeModal">✕</button>
+          </div>
+        </div>
+      </teleport>
+    </section>
+  </template>
 
   <!-- ── 준비 중 ── -->
   <section class="soon" v-else>
@@ -220,9 +268,15 @@
 </style>
 
 <script>
-import { STATS, REGCAT, FEST_BY_REG } from './data/home-data.js'
+import { STATS, REGCAT, FEST_BY_REG, CAT_COLOR } from './data/home-data.js'
 import Calendar from './components/Calendar.vue'
 import Community from './components/Community.vue'
+import PLACES from './data/masil-data-seoul.js'
+import * as L from 'leaflet'
+import 'leaflet.markercluster'
+import 'leaflet.markercluster/dist/MarkerCluster.css'
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
+import ChatWidget from './components/ChatWidget.vue'
 import EVENTS from './data/events.js' // 있으면 불러오고, 없으면 이후 파일 생성하세요
 
 const CAT_PAL = ['#A8A0E8', '#9BD4BE', '#F3C2A0', '#F0AEC5', '#B7A7E6', '#A6C1EC', '#F1B4A6', '#BFD59C']
@@ -230,7 +284,7 @@ const REG_PAL = ['#A8A0E8', '#9BD4BE', '#F3C2A0', '#F0AEC5', '#A6C1EC']
 
 export default {
   name: 'App',
-  components: { Calendar, Community },
+  components: { ChatWidget,Calendar, Community },
   data(){ return {
     view:'home', STATS, REG_PAL,
     NAV:[
@@ -270,7 +324,40 @@ export default {
       writer:'',
       password:'',
       content:''
-    }
+    },
+
+    // map state
+    cluster: null,
+  
+    map: null,
+    mapInitialized: false,
+    markers: [],
+    places: PLACES.map(p=>({
+      id: p.i,
+      title: p.t,
+      category: p.c,
+      region: p.r,
+      lat: p.la,
+      lng: p.ln,
+      img: p.im || '',
+      address: p.a || '',
+      desc: p.te || ''
+    })),
+    filteredPlaces: PLACES.map(p=>({
+      id: p.i,
+      title: p.t,
+      category: p.c,
+      region: p.r,
+      lat: p.la,
+      lng: p.ln,
+      img: p.im || '',
+      address: p.a || '',
+      desc: p.te || ''
+    })),
+    query: '',
+    mapRegion: '',
+    categoryFilter: '',
+    activePlace: null,
   }
 },
 
@@ -289,6 +376,110 @@ export default {
   },
   methods:{
     go(v){ this.view=v; window.scrollTo({top:0,behavior:'smooth'}); },
+
+    initMap(){ 
+      if(this.mapInitialized) return;
+      this.mapInitialized = true;
+      this.map = L.map('map', { center:[37.5665,126.9780], zoom:20 });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors' }).addTo(this.map);
+      this.drawMarkers();
+      this.map.on("moveend", () => {
+      this.drawMarkers();
+    });
+
+    this.map.on("zoomend", () => {
+      this.drawMarkers();
+    });
+      // close modal when map clicked
+      this.map.on('click', ()=>{ this.activePlace = null; });
+      setTimeout(()=>{ if(this.map) this.map.invalidateSize(); },200);
+    },
+
+    drawMarkers() {
+      if (!this.map) return;
+
+      this.clearMarkers();
+
+      // 현재 지도에 보이는 영역
+      const bounds = this.map.getBounds();
+
+      // 현재 화면 안에 있는 장소만 선택
+      const visiblePlaces = this.filteredPlaces.filter(p =>
+        bounds.contains([p.lat, p.lng])
+      );
+
+      console.log(
+        `전체 ${this.filteredPlaces.length}개 / 현재 화면 ${visiblePlaces.length}개`
+      );
+
+      visiblePlaces.forEach(p => {
+        const color =
+          CAT_COLOR && CAT_COLOR[p.category]
+            ? CAT_COLOR[p.category]
+            : "#2a78d6";
+
+        const marker = L.circleMarker(
+          [p.lat, p.lng],
+          {
+            radius: 8,
+            fillColor: color,
+            color: "#fff",
+            weight: 1,
+            fillOpacity: 1,
+          }
+        ).addTo(this.map);
+
+        marker.on("click", () => {
+          this.openPlace(p);
+        });
+
+        this.markers.push(marker);
+      });
+    },
+
+    clearMarkers(){ if(!this.map) return; this.markers.forEach(m=>this.map.removeLayer(m)); this.markers = []; },
+
+    flyToPlace(p) {
+      if (!this.map) this.initMap();
+
+      this.map.setView([p.lat, p.lng], 13, {
+        animate: true,
+      });
+
+      this.drawMarkers();
+    },
+
+    openPlace(p){ this.activePlace = p; },
+
+    closeModal(){ this.activePlace = null; },
+
+    filterList(){
+      const q = (this.query||'').trim().toLowerCase();
+      this.filteredPlaces = this.places.filter(p=>{
+        if(this.categoryFilter!=='' && p.category!==this.categoryFilter) return false;
+        if(this.mapRegion!=='' && p.region!==Number(this.mapRegion)) return false;
+        if(q && !(p.title.toLowerCase().includes(q) || (p.address||'').toLowerCase().includes(q))) return false;
+        return true;
+      });
+      this.drawMarkers();
+    },
+
+    handleChatOpenPlace(id){
+      const p = this.places.find(x=>x.id===id)
+      if(!p) return
+      this.go('map')
+      this.$nextTick(()=>{
+        this.initMap()
+        this.flyToPlace(p)
+        this.openPlace(p)
+      })
+    },
+
+    // modal shows detail card while the main map remains visible in the background
+
+  },
+  
+
     savePost(){
       if(this.form.id){ // 수정
         const idx = this.posts.findIndex(p => p.id === this.form.id);
@@ -311,9 +502,16 @@ export default {
         this.posts = this.posts.filter(p => p.id !== this.activePost.id);
         this.commMode = 'list';
       } else alert('비밀번호 불일치');
-    }
+    },
+  
 
+  watch:{
+    view(nv){ if(nv==='map'){ this.$nextTick(()=>{ this.initMap(); }); } },
+    categoryFilter(){ this.filterList(); },
+    mapRegion(){ this.filterList(); },
   },
+
+
   mounted(){ setTimeout(()=>{ this.animBar=true; },250); },
 }
 </script>
