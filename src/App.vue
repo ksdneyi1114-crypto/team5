@@ -95,23 +95,118 @@
       </section>
 
 
-    </template>
-
-    <!-- 캘린더 또는 준비중 화면 -->
-    <template v-else>
-      <Calendar v-if="view==='cal'" :events="EVENTS" />
-      <section class="soon" v-else>
-        <div class="soon-inner">
-          <h2>{{ SOON[view].title }}</h2>
-          <p>{{ SOON[view].desc }}</p>
-          <div class="soon-badge">🚧 준비 중 · 별도 개발 후 홈 화면과 연결됩니다</div>
-          <button class="btn btn-ghost" @click="go('home')">← 홈으로 돌아가기</button>
+  </template>
+  <template v-else-if="view==='comm'">
+    <section class="block">
+      <!-- 리스트 모드 -->
+      <div v-if="commMode==='list'">
+        <div class="block-head"><h2>커뮤니티</h2> <button @click="commMode='write'">글쓰기</button></div>
+        <div class="post-list">
+          <div v-for="p in posts" :key="p.id" class="post-item" @click="readPost(p)">
+            <h3>{{ p.title }}</h3>
+            <p>{{ p.writer }} | {{ p.date }}</p>
+          </div>
         </div>
-      </section>
-    </template>
+      </div>
+      
+      <!-- 글쓰기/수정 모드 -->
+      <div v-else-if="commMode==='write'" class="form-box">
+
+        <div class="form-row">
+          <input v-model="form.writer" placeholder="작성자">
+          <input
+            v-model="form.password"
+            type="password"
+            placeholder="비밀번호">
+        </div>
+
+        <input
+          v-model="form.title"
+          placeholder="제목을 입력하세요">
+
+        <textarea
+          v-model="form.content"
+          placeholder="내용을 입력하세요"></textarea>
+
+        <div class="action-bar">
+          <button class="btn-solid" @click="savePost">
+            {{ form.id ? '수정하기' : '등록하기' }}
+          </button>
+
+          <button
+            class="btn-ghost"
+            @click="commMode='list'">
+            취소
+          </button>
+        </div>
+      </div>
+      <!-- 읽기 모드 -->
+      <div v-else-if="commMode==='read'" class="read-box">
+
+        <h2>{{ activePost.title }}</h2>
+
+        <div class="read-info">
+          {{ activePost.writer }} · {{ activePost.date }}
+        </div>
+
+        <div class="post-content">
+          {{ activePost.content }}
+        </div>
+
+        <div class="password-box">
+          <input
+            v-model="checkPwd"
+            type="password"
+            placeholder="수정/삭제 비밀번호">
+        </div>
+
+        <div class="action-bar">
+
+          <button class="btn-solid" @click="editPost">
+            수정
+          </button>
+
+          <button class="btn-danger" @click="deletePost">
+            삭제
+          </button>
+
+          <button
+            class="btn-ghost"
+            @click="commMode='list'">
+            목록
+          </button>
+
+        </div>
+
+      </div>
+    </section>
+  </template>
+
+  <!-- ── 준비 중 ── -->
+  <section class="soon" v-else>
+    <div class="soon-inner">
+      <h2>{{ SOON[view].title }}</h2>
+      <p>{{ SOON[view].desc }}</p>
+      <button class="btn btn-ghost" @click="go('home')">← 홈으로 돌아가기</button>
+    </div>
+  </section>
 
   </div>
 </template>
+
+<style scoped>
+/* 커뮤니티 전용 스타일 추가 */
+.comm-page { max-width: 600px; margin: 0 auto; padding: 20px; }
+.post-item { padding: 20px; border-bottom: 1px solid #eee; cursor: pointer; }
+.post-item:hover { background: #f9f9f9; }
+.p-info { font-size: 0.85rem; color: #888; margin-bottom: 5px; }
+.post-content { white-space: pre-wrap; line-height: 1.6; padding: 20px 0; min-height: 150px; }
+.form-box input, .form-box textarea { width: 100%; margin-bottom: 10px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; }
+.action-bar { display: flex; gap: 10px; align-items: center; margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee; }
+.danger { color: #ff4d4f; }
+.btn-solid { background: #A8A0E8; color: white; padding: 8px 16px; border-radius: 20px; border: none; cursor: pointer; }
+.btn-ghost { background: transparent; border: 1px solid #ddd; padding: 8px 16px; border-radius: 20px; cursor: pointer; }
+</style>
 
 <script>
 import { STATS, REGCAT, FEST_BY_REG } from './data/home-data.js'
@@ -160,6 +255,30 @@ export default {
   },
   methods:{
     go(v){ this.view=v; window.scrollTo({top:0,behavior:'smooth'}); },
+    savePost(){
+      if(this.form.id){ // 수정
+        const idx = this.posts.findIndex(p => p.id === this.form.id);
+        this.posts[idx] = { ...this.form };
+      } else { // 신규
+        this.posts.unshift({ ...this.form, id:Date.now(), date:new Date().toLocaleDateString() });
+      }
+      this.commMode = 'list';
+      this.form = { id:null, title:'', writer:'', password:'', content:'' };
+    },
+    readPost(p){ this.activePost = p; this.commMode = 'read'; },
+    editPost(){
+      if(this.activePost.password === this.checkPwd){
+        this.form = { ...this.activePost };
+        this.commMode = 'write';
+      } else alert('비밀번호 불일치');
+    },
+    deletePost(){
+      if(this.activePost.password === this.checkPwd){
+        this.posts = this.posts.filter(p => p.id !== this.activePost.id);
+        this.commMode = 'list';
+      } else alert('비밀번호 불일치');
+    }
+
   },
   mounted(){ setTimeout(()=>{ this.animBar=true; },250); },
 }
