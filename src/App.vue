@@ -1,6 +1,5 @@
 <template>
-  <div class="page" v-cloak>
-
+  <div id="app">
     <!-- 상단 네비 -->
     <header class="topbar">
       <div class="brand" @click="go('home')">
@@ -13,10 +12,14 @@
       <nav class="nav">
         <button v-for="n in NAV" :key="n.k" class="nav-link" :class="{on:view===n.k}" @click="go(n.k)">{{ n.label }}</button>
       </nav>
-    </header>
+    </header>    
+  
+  <template v-if="view==='home'">
+
+    <main class="home">    
 
     <!-- ── 홈 ── -->
-    <template v-if="view==='home'">
+    <!--HomeView v-if="view==='home'"-->
 
       <!-- 히어로 -->
       <section class="hero">
@@ -94,8 +97,10 @@
         </button>
       </section>
 
-
+  </main>
   </template>
+
+
   <template v-else-if="view==='comm'">
     <section class="block">
       <!-- 리스트 모드 -->
@@ -110,7 +115,7 @@
       </div>
       
       <!-- 글쓰기/수정 모드 -->
-      <div v-else-if="commMode==='write'" class="form-box">
+      <div v-if="commMode==='write'" class="form-box">
 
         <div class="form-row">
           <input v-model="form.writer" placeholder="작성자">
@@ -141,7 +146,7 @@
         </div>
       </div>
       <!-- 읽기 모드 -->
-      <div v-else-if="commMode==='read'" class="read-box">
+      <div v-if="commMode==='read'" class="read-box">
 
         <h2>{{ activePost.title }}</h2>
 
@@ -182,6 +187,12 @@
     </section>
   </template>
 
+  <Calendar
+  v-else-if="view === 'cal'"
+  :events="EVENTS"
+  />
+
+
   <!-- ── 준비 중 ── -->
   <section class="soon" v-else>
     <div class="soon-inner">
@@ -211,6 +222,7 @@
 <script>
 import { STATS, REGCAT, FEST_BY_REG } from './data/home-data.js'
 import Calendar from './components/Calendar.vue'
+import Community from './components/Community.vue'
 import EVENTS from './data/events.js' // 있으면 불러오고, 없으면 이후 파일 생성하세요
 
 const CAT_PAL = ['#A8A0E8', '#9BD4BE', '#F3C2A0', '#F0AEC5', '#B7A7E6', '#A6C1EC', '#F1B4A6', '#BFD59C']
@@ -218,7 +230,7 @@ const REG_PAL = ['#A8A0E8', '#9BD4BE', '#F3C2A0', '#F0AEC5', '#A6C1EC']
 
 export default {
   name: 'App',
-  components: { Calendar },
+  components: { Calendar, Community },
   data(){ return {
     view:'home', STATS, REG_PAL,
     NAV:[
@@ -233,13 +245,35 @@ export default {
       {k:'comm', title:'커뮤니티', desc:'로그인 없이 익명으로. 비밀번호로 내 글을 수정·삭제해요.'},
     ],
     SOON:{
+      home:{title:'홈', desc:'홈입니다'},
       map:{title:'지도', desc:'서울 6,505곳을 카테고리별 색으로 한눈에 보고, 권역·종류로 걸러 찾는 지도 기능입니다.'},
       cal:{title:'캘린더', desc:'날짜가 있는 축제·행사를 달력에 펼쳐, 이번 주말 무엇이 열리는지 바로 확인하는 기능입니다.'},
       comm:{title:'커뮤니티', desc:'로그인 없이 익명으로 지역 이야기를 나누고, 비밀번호로 내 글을 수정·삭제하는 게시판입니다.'},
     },
     catRegion:'', animBar:false,
-    EVENTS // expose EVENTS to template as prop for Calendar
-  }},
+    EVENTS, // expose EVENTS to template as prop for Calendar
+
+    activePost: {
+      title: '',
+      writer: '',
+      date: '',
+      content: '',
+      password: ''
+    },
+
+    posts: [],
+    commMode: 'list',
+    checkPwd: '',
+    form:{
+      id:null,
+      title:'',
+      writer:'',
+      password:'',
+      content:''
+    }
+  }
+},
+
   computed:{
     feats(){ return STATS.regions.map((name,ri)=>({ name, count:STATS.byreg[ri], fest:FEST_BY_REG[ri] })); },
     catCounts(){ return this.catRegion===''?STATS.bycat:REGCAT[this.catRegion]; },
