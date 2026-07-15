@@ -1,0 +1,19 @@
+{
+  "name": "masil-home",
+  "version": "1.0.0",
+  "description": "마실 · 홈 화면 (Vue 3 + Vite 정적 SPA). 지도·캘린더·커뮤니티 기능은 별도 개발 후 연결됩니다.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "vite": "^6.0.7"
+  }
+}
